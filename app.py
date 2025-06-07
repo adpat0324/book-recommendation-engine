@@ -155,10 +155,16 @@ def add_book():
 @app.route('/remove_book', methods=['POST'])
 def remove_book():
     book_title = request.json.get('book_title')
-    
+
     global liked_books
     liked_books = [book for book in liked_books if book['title'] != book_title]
-    
+
+    return jsonify(liked_books)
+
+# Route to retrieve currently liked books
+@app.route('/liked_books', methods=['GET'])
+def get_liked_books():
+    """Return the list of liked books as JSON."""
     return jsonify(liked_books)
 
 if __name__ == '__main__':

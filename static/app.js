@@ -1,4 +1,18 @@
 // Add Book to Liked Books
+function renderLikedBooks(data) {
+    const likedBooksList = document.getElementById('liked-books');
+    likedBooksList.innerHTML = '';
+    data.forEach(book => {
+        const li = document.createElement('li');
+        li.innerHTML = `
+            <img src="${book.image_url}" alt="${book.title} cover" width="50">
+            <p>${book.title} <span>By: ${book.authors}</span></p>
+            <button class="remove-book" onclick="removeBook('${book.title.replace(/'/g, "\\'")}')">X</button>
+        `;
+        likedBooksList.appendChild(li);
+    });
+}
+
 function addBookToLiked(bookTitle = null) {
     if (!bookTitle) {
         bookTitle = document.getElementById('liked-book').value;
@@ -20,19 +34,7 @@ function addBookToLiked(bookTitle = null) {
             document.getElementById('autocomplete-results').style.display = 'none';  // Hide dropdown
             
             // Update the liked books list on the UI
-            const likedBooksList = document.getElementById('liked-books');
-            likedBooksList.innerHTML = ''; // Clear previous list
-
-            // Re-render the updated liked books list
-            data.forEach(book => {
-                const li = document.createElement('li');
-                li.innerHTML = `
-                    <img src="${book.image_url}" alt="${book.title} cover" width="50">
-                    <p>${book.title} <span>By: ${book.authors}</span></p>
-                    <button class="remove-book" onclick="removeBook('${book.title.replace(/'/g, "\\'")}')">X</button>
-                `;
-                likedBooksList.appendChild(li);
-            });
+            renderLikedBooks(data);
 
             // Now, get and display recommendations
             getRecommendations();
@@ -53,6 +55,23 @@ document.getElementById('liked-book').addEventListener('keydown', function(event
     }
 });
 
+// Load liked books when the page is first opened
+document.addEventListener('DOMContentLoaded', function() {
+    fetch('/liked_books')
+        .then(response => response.json())
+        .then(data => {
+            if (Array.isArray(data)) {
+                renderLikedBooks(data);
+                if (data.length > 0) {
+                    getRecommendations();
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching liked books:', error);
+        });
+});
+
 
 function removeBook(bookTitle) {
     fetch('/remove_book', {
@@ -65,18 +84,7 @@ function removeBook(bookTitle) {
     .then(response => response.json())
     .then(data => {
         // Clear and update the liked books list after removal
-        const likedBooksList = document.getElementById('liked-books');
-        likedBooksList.innerHTML = ''; // Clear previous list
-
-        data.forEach(book => {
-            const li = document.createElement('li');
-            li.innerHTML = `
-                <img src="${book.image_url}" alt="${book.title} cover" width="50">
-                <p>${book.title} <span>By: ${book.authors}</span></p>
-                <button class="remove-book" onclick="removeBook('${book.title.replace(/'/g, "\\'")}')">X</button>
-            `;
-            likedBooksList.appendChild(li);
-        });
+        renderLikedBooks(data);
 
         // Get and display recommendations after removing a book
         getRecommendations();
