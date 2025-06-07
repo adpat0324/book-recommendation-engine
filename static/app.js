@@ -13,6 +13,35 @@ function renderLikedBooks(data) {
     });
 }
 
+// Update the recommendation section of the UI
+function updateRecommendationsUI(data) {
+    const recommendedBooksList = document.getElementById('recommended-books-list');
+    recommendedBooksList.innerHTML = '';
+
+    // If a message is provided, show it and hide the list
+    if (data.message) {
+        const messageElement = document.getElementById('recommendation-message');
+        messageElement.textContent = data.message;
+        recommendedBooksList.style.display = 'none';
+        return;
+    }
+
+    const messageElement = document.getElementById('recommendation-message');
+    messageElement.textContent = '';
+    recommendedBooksList.style.display = 'grid';
+
+    (data.recommendations || data).forEach(book => {
+        const bookItem = document.createElement('div');
+        bookItem.className = 'recommended-book-item';
+        bookItem.innerHTML = `
+            <img src="${book.image_url}" alt="${book.title} cover" />
+            <h4>${book.title}</h4>
+            <p>By: ${book.authors}</p>
+        `;
+        recommendedBooksList.appendChild(bookItem);
+    });
+}
+
 function addBookToLiked(bookTitle = null) {
     if (!bookTitle) {
         bookTitle = document.getElementById('liked-book').value;
@@ -34,10 +63,10 @@ function addBookToLiked(bookTitle = null) {
             document.getElementById('autocomplete-results').style.display = 'none';  // Hide dropdown
             
             // Update the liked books list on the UI
-            renderLikedBooks(data);
+            renderLikedBooks(data.liked_books);
 
-            // Now, get and display recommendations
-            getRecommendations();
+            // Update recommendations based on server response
+            updateRecommendationsUI(data);
         })
         .catch(error => {
             console.error('Error:', error);
@@ -98,32 +127,7 @@ function getRecommendations() {
     fetch('/get_recommendations')
         .then(response => response.json())
         .then(data => {
-            const recommendedBooksList = document.getElementById('recommended-books-list');
-            recommendedBooksList.innerHTML = '';  // Clear previous recommendations
-
-            // Handle the case where no recommendations are available
-            if (data.message) {
-                const messageElement = document.getElementById('recommendation-message');
-                messageElement.textContent = data.message;
-                recommendedBooksList.style.display = 'none'; // Hide the recommendations list
-                return;
-            }
-
-            // Show the recommended books
-            const messageElement = document.getElementById('recommendation-message');
-            messageElement.textContent = ''; // Clear any previous messages
-            recommendedBooksList.style.display = 'grid'; // Ensure grid layout for recommendations
-
-            data.forEach(book => {
-                const bookItem = document.createElement('div');
-                bookItem.className = 'recommended-book-item';
-                bookItem.innerHTML = `
-                    <img src="${book.image_url}" alt="${book.title} cover" />
-                    <h4>${book.title}</h4>
-                    <p>By: ${book.authors}</p>
-                `;
-                recommendedBooksList.appendChild(bookItem);
-            });
+            updateRecommendationsUI(data);
         })
         .catch(error => {
             console.error('Error fetching recommendations:', error);
