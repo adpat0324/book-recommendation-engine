@@ -127,7 +127,7 @@ function getRecommendations() {
 function searchBooks(event) {
     const searchQuery = event.target.value;
     if (searchQuery.length > 0) {
-        fetch(`/search_books?query=${searchQuery}`)
+        fetch(`/search_books?query=${encodeURIComponent(searchQuery)}`)
         .then(response => response.json())
         .then(data => {
             const autocompleteResults = document.getElementById('autocomplete-results');
@@ -136,11 +136,10 @@ function searchBooks(event) {
             // Check if 'items' is present and is an array
             if (data.items && Array.isArray(data.items)) {
                 data.items.forEach(book => {
-                    // Extract relevant details from the 'volumeInfo' object
-                    const bookInfo = book.volumeInfo;
-                    const title = bookInfo.title || 'No Title';
-                    const authors = bookInfo.authors ? bookInfo.authors.join(', ') : 'Unknown Author';
-                    const imageUrl = bookInfo.imageLinks ? bookInfo.imageLinks.thumbnail : '';
+                    // Extract details returned by our Flask endpoint
+                    const title = book.title || 'No Title';
+                    const authors = book.authors || 'Unknown Author';
+                    const imageUrl = book.image_url || '';
                     
                     // Create the dropdown item with title, author, and cover image
                     const li = document.createElement('li');
