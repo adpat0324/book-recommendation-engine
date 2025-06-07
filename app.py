@@ -178,12 +178,26 @@ def add_book():
 
     if book_name:
         book_info = get_book_info(book_name)
-        
+
         if book_info:
             liked_books.append(book_info)
-        
-        return jsonify(liked_books)
-    return jsonify([])
+
+    # Prepare recommendations dynamically based on updated list
+    message = ""
+    recommended_books = []
+
+    if len(liked_books) < 3:
+        message = "Add at least 3 books to get recommendations."
+    else:
+        recommended_books = recommend_books(liked_books)
+        if not recommended_books:
+            message = "No recommendations available at the moment."
+
+    return jsonify({
+        'liked_books': liked_books,
+        'recommendations': recommended_books,
+        'message': message
+    })
 
 @app.route('/remove_book', methods=['POST'])
 def remove_book():
