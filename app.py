@@ -40,6 +40,8 @@ def get_book_info(book_name):
 # Function to get vector representation for a description using GloVe
 def get_glove_vector(description):
     words = description.split()
+def get_glove_vector(text):
+    words = text.split()
     vector = np.zeros(300)  # GloVe vectors are 300-dimensional
     word_count = 0
     for word in words:
@@ -47,6 +49,21 @@ def get_glove_vector(description):
             vector += glove_model[word]
             word_count += 1
     return vector / word_count if word_count > 0 else vector
+
+# Create a combined vector for a book using title, authors, description, and genre
+def create_book_vector(book):
+    description_vec = get_glove_vector(book.get('description', ''))
+    title_vec = get_glove_vector(book.get('title', ''))
+    authors_vec = get_glove_vector(book.get('authors', ''))
+    genre_vec = get_glove_vector(book.get('genre', ''))
+
+    # Weighted combination: description has highest weight
+    combined = (0.6 * description_vec +
+                0.2 * title_vec +
+                0.1 * authors_vec +
+                0.1 * genre_vec)
+
+    return combined
 
 # Function to calculate cosine similarity between two vectors
 def cosine_similarity_vectors(vec1, vec2):
@@ -60,6 +77,15 @@ def recommend_books(liked_books):
     # Combine descriptions, genres, authors for similarity calculation
     combined_descriptions = " ".join([book['description'] for book in liked_books])
     search_query = combined_descriptions[:50]  # Get first 50 characters as a search query to find similar books
+    # Build a search query using titles, authors and genres of liked books
+    search_elements = []
+    for book in liked_books:
+        search_elements.append(book.get('title', ''))
+        search_elements.append(book.get('authors', ''))
+        if book.get('genre') and book['genre'] != 'Unknown Genre':
+            search_elements.append(book['genre'])
+    combined_search = " ".join(search_elements)
+    search_query = combined_search[:80]  # limit query length for API call
 
     # Call Google Books API to get books based on a search query
     url = f'https://www.googleapis.com/books/v1/volumes?q={search_query}'
@@ -67,28 +93,35 @@ def recommend_books(liked_books):
     books_data = response.json().get('items', [])
     
     # Get descriptions and vectors for the books fetched from Google Books API
+    # Collect book information from the API
     fetched_books = []
     for book in books_data:
         book_info = book['volumeInfo']
         description = book_info.get('description', '')
         title = book_info.get('title', '')
         authors = book_info.get('authors', ['Unknown Author'])
+        genre = ', '.join(book_info.get('categories', [])) if 'categories' in book_info else 'Unknown Genre'
         image_url = book_info.get('imageLinks', {}).get('thumbnail', '')
         
+
         # Create a dictionary of book information
         fetched_books.append({
             'title': title,
             'authors': ', '.join(authors),
             'description': description,
+            'genre': genre,
             'image_url': image_url
         })
     
     # Compare each fetched book with the liked books using GloVe embeddings
     liked_vectors = np.array([get_glove_vector(book['description']) for book in liked_books])
+    # Compare each fetched book with the liked books using aggregated vectors
+    liked_vectors = np.array([create_book_vector(book) for book in liked_books])
     recommended_books = []
     
     for fetched_book in fetched_books:
         fetched_vector = get_glove_vector(fetched_book['description'])
+        fetched_vector = create_book_vector(fetched_book)
         similarities = []
         
         for liked_vector in liked_vectors:
