@@ -29,7 +29,7 @@ function addBookToLiked(bookTitle = null) {
                 li.innerHTML = `
                     <img src="${book.image_url}" alt="${book.title} cover" width="50">
                     <p>${book.title} <span>By: ${book.authors}</span></p>
-                    <button class="remove-book" onclick="removeBook('${book.title}')">X</button>
+                    <button class="remove-book" onclick="removeBook('${book.title.replace(/'/g, "\\'")}')">X</button>
                 `;
                 likedBooksList.appendChild(li);
             });
@@ -52,6 +52,76 @@ document.getElementById('liked-book').addEventListener('keydown', function(event
         addBookToLiked();
     }
 });
+
+
+function removeBook(bookTitle) {
+    fetch('/remove_book', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ book_title: bookTitle })
+    })
+    .then(response => response.json())
+    .then(data => {
+        // Clear and update the liked books list after removal
+        const likedBooksList = document.getElementById('liked-books');
+        likedBooksList.innerHTML = ''; // Clear previous list
+
+        data.forEach(book => {
+            const li = document.createElement('li');
+            li.innerHTML = `
+                <img src="${book.image_url}" alt="${book.title} cover" width="50">
+                <p>${book.title} <span>By: ${book.authors}</span></p>
+                <button class="remove-book" onclick="removeBook('${book.title.replace(/'/g, "\\'")}')">X</button>
+            `;
+            likedBooksList.appendChild(li);
+        });
+
+        // Get and display recommendations after removing a book
+        getRecommendations();
+    })
+    .catch(error => {
+        console.error('Error:', error);
+    });
+}
+
+function getRecommendations() {
+    fetch('/get_recommendations')
+        .then(response => response.json())
+        .then(data => {
+            const recommendedBooksList = document.getElementById('recommended-books-list');
+            recommendedBooksList.innerHTML = '';  // Clear previous recommendations
+
+            // Handle the case where no recommendations are available
+            if (data.message) {
+                const messageElement = document.getElementById('recommendation-message');
+                messageElement.textContent = data.message;
+                recommendedBooksList.style.display = 'none'; // Hide the recommendations list
+                return;
+            }
+
+            // Show the recommended books
+            const messageElement = document.getElementById('recommendation-message');
+            messageElement.textContent = ''; // Clear any previous messages
+            recommendedBooksList.style.display = 'grid'; // Ensure grid layout for recommendations
+
+            data.forEach(book => {
+                const bookItem = document.createElement('div');
+                bookItem.className = 'recommended-book-item';
+                bookItem.innerHTML = `
+                    <img src="${book.image_url}" alt="${book.title} cover" />
+                    <h4>${book.title}</h4>
+                    <p>By: ${book.authors}</p>
+                `;
+                recommendedBooksList.appendChild(bookItem);
+            });
+        })
+        .catch(error => {
+            console.error('Error fetching recommendations:', error);
+        });
+}
+
 
 // Function to search books and show dropdown
 function searchBooks(event) {

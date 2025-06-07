@@ -104,11 +104,9 @@ def recommend_books(liked_books):
 # Route to get book recommendations
 @app.route('/get_recommendations', methods=['GET'])
 def get_recommendations():
-    # Check if liked_books list has 3 or more books
     if len(liked_books) < 3:
         return jsonify({"message": "Add at least 3 books to get recommendations."})
 
-    # Get the recommended books based on the liked books list
     recommended_books = recommend_books(liked_books)
 
     if not recommended_books:
@@ -124,7 +122,6 @@ def search_books():
     response = requests.get(url)
     data = response.json()
     
-    # Ensure we're sending the correct structure
     books = []
     if 'items' in data:
         for item in data['items']:
@@ -136,7 +133,7 @@ def search_books():
                 'description': book_info.get('description', '')
             })
     
-    return jsonify({'items': books})  # Return books inside an 'items' key
+    return jsonify({'items': books})
 
 @app.route('/')
 def index():
