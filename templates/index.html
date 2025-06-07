@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Book Recommendation</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <h1>Book Recommendation Engine</h1>
+    <div>
+        <h2>Your Liked Books:</h2>
+        <ul id="liked-books">
+            <!-- Liked books will appear here -->
+        </ul>
+    </div>
+
+    
+    <div id="search-section">
+        <label for="liked-book">Add a book to your liked list:</label>
+        <input type="text" id="liked-book" placeholder="Enter book name" onkeyup="searchBooks(event)">
+        <ul id="autocomplete-results" class="autocomplete-dropdown"></ul>
+    </div>
+
+    
+
+    <div id="recommended-books">
+        <h3>Recommended Books:</h3>
+        <div id="recommended-books-list">
+            <!-- Recommended books will be dynamically added here -->
+        </div>
+        <p id="recommendation-message">Add at least 3 books to get recommendations.</p>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
+

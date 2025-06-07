@@ -1,0 +1,169 @@
+import requests
+import gensim.downloader as api
+import numpy as np
+from flask import Flask, render_template, request, jsonify
+from sklearn.metrics.pairwise import cosine_similarity
+
+app = Flask(__name__)
+
+# Load pre-trained GloVe model (300-dimensional vectors)
+glove_model = api.load("glove-wiki-gigaword-300")
+
+# In-memory list of books liked by the user (stores title, author, genre, description, and image)
+liked_books = []
+
+# Function to query the Google Books API for book details
+def get_book_info(book_name):
+    url = f'https://www.googleapis.com/books/v1/volumes?q={book_name}'
+    response = requests.get(url)
+    data = response.json()
+
+    if 'items' not in data:
+        return None  # No books found
+    
+    book_data = data['items'][0]['volumeInfo']
+    title = book_data.get('title', 'No Title Found')
+    authors = book_data.get('authors', ['Unknown Author'])
+    description = book_data.get('description', 'No description available.')
+    image_url = book_data.get('imageLinks', {}).get('thumbnail', '')
+    
+    genre = ', '.join(book_data.get('categories', [])) if 'categories' in book_data else 'Unknown Genre'
+
+    return {
+        'title': title,
+        'authors': ', '.join(authors),
+        'description': description,  # Description is used for similarity
+        'genre': genre,
+        'image_url': image_url
+    }
+
+# Function to get vector representation for a description using GloVe
+def get_glove_vector(description):
+    words = description.split()
+    vector = np.zeros(300)  # GloVe vectors are 300-dimensional
+    word_count = 0
+    for word in words:
+        if word in glove_model:
+            vector += glove_model[word]
+            word_count += 1
+    return vector / word_count if word_count > 0 else vector
+
+# Function to calculate cosine similarity between two vectors
+def cosine_similarity_vectors(vec1, vec2):
+    return np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
+
+# Function to get similar books from a large dataset (Google Books API)
+def recommend_books(liked_books):
+    if len(liked_books) < 1:
+        return []
+
+    # Combine descriptions, genres, authors for similarity calculation
+    combined_descriptions = " ".join([book['description'] for book in liked_books])
+    search_query = combined_descriptions[:50]  # Get first 50 characters as a search query to find similar books
+
+    # Call Google Books API to get books based on a search query
+    url = f'https://www.googleapis.com/books/v1/volumes?q={search_query}'
+    response = requests.get(url)
+    books_data = response.json().get('items', [])
+    
+    # Get descriptions and vectors for the books fetched from Google Books API
+    fetched_books = []
+    for book in books_data:
+        book_info = book['volumeInfo']
+        description = book_info.get('description', '')
+        title = book_info.get('title', '')
+        authors = book_info.get('authors', ['Unknown Author'])
+        image_url = book_info.get('imageLinks', {}).get('thumbnail', '')
+        
+        # Create a dictionary of book information
+        fetched_books.append({
+            'title': title,
+            'authors': ', '.join(authors),
+            'description': description,
+            'image_url': image_url
+        })
+    
+    # Compare each fetched book with the liked books using GloVe embeddings
+    liked_vectors = np.array([get_glove_vector(book['description']) for book in liked_books])
+    recommended_books = []
+    
+    for fetched_book in fetched_books:
+        fetched_vector = get_glove_vector(fetched_book['description'])
+        similarities = []
+        
+        for liked_vector in liked_vectors:
+            similarity = cosine_similarity_vectors(liked_vector, fetched_vector)
+            similarities.append(similarity)
+        
+        avg_similarity = np.mean(similarities)
+        if avg_similarity > 0.1:  # We recommend books with a similarity above a threshold
+            recommended_books.append(fetched_book)
+    
+    return recommended_books[:5]  # Return top 5 recommended books
+
+# Route to get book recommendations
+@app.route('/get_recommendations', methods=['GET'])
+def get_recommendations():
+    # Check if liked_books list has 3 or more books
+    if len(liked_books) < 3:
+        return jsonify({"message": "Add at least 3 books to get recommendations."})
+
+    # Get the recommended books based on the liked books list
+    recommended_books = recommend_books(liked_books)
+
+    if not recommended_books:
+        return jsonify({"message": "No recommendations available at the moment."})
+
+    return jsonify(recommended_books)
+
+# Route to search for books
+@app.route('/search_books')
+def search_books():
+    query = request.args.get('query')
+    url = f'https://www.googleapis.com/books/v1/volumes?q={query}'
+    response = requests.get(url)
+    data = response.json()
+    
+    # Ensure we're sending the correct structure
+    books = []
+    if 'items' in data:
+        for item in data['items']:
+            book_info = item.get('volumeInfo', {})
+            books.append({
+                'title': book_info.get('title', 'No Title'),
+                'authors': ', '.join(book_info.get('authors', ['Unknown Author'])),
+                'image_url': book_info.get('imageLinks', {}).get('thumbnail', ''),
+                'description': book_info.get('description', '')
+            })
+    
+    return jsonify({'items': books})  # Return books inside an 'items' key
+
+@app.route('/')
+def index():
+    return render_template('index.html', liked_books=liked_books)
+
+@app.route('/add_book', methods=['POST'])
+def add_book():
+    book_name = request.json.get('book')
+
+    if book_name:
+        book_info = get_book_info(book_name)
+        
+        if book_info:
+            liked_books.append(book_info)
+        
+        return jsonify(liked_books)
+    return jsonify([])
+
+@app.route('/remove_book', methods=['POST'])
+def remove_book():
+    book_title = request.json.get('book_title')
+    
+    global liked_books
+    liked_books = [book for book in liked_books if book['title'] != book_title]
+    
+    return jsonify(liked_books)
+
+if __name__ == '__main__':
+    app.run(debug=True)
+
