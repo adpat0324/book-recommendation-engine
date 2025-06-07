@@ -118,7 +118,9 @@ def recommend_books(liked_books):
     # Compare each fetched book with the liked books using aggregated vectors
     liked_vectors = np.array([create_book_vector(book) for book in liked_books])
     recommended_books = []
-    
+    seen_titles = set()
+    liked_titles = {(book['title'], book['authors']) for book in liked_books}
+
     for fetched_book in fetched_books:
         fetched_vector = get_glove_vector(fetched_book['description'])
         fetched_vector = create_book_vector(fetched_book)
@@ -130,7 +132,10 @@ def recommend_books(liked_books):
         
         avg_similarity = np.mean(similarities)
         if avg_similarity > 0.1:  # We recommend books with a similarity above a threshold
-            recommended_books.append(fetched_book)
+            unique_key = (fetched_book['title'], fetched_book['authors'])
+            if unique_key not in seen_titles and unique_key not in liked_titles:
+                recommended_books.append(fetched_book)
+                seen_titles.add(unique_key)
     
     return recommended_books[:5]  # Return top 5 recommended books
 
@@ -180,7 +185,9 @@ def add_book():
         book_info = get_book_info(book_name)
 
         if book_info:
-            liked_books.append(book_info)
+
+             if not any(b['title'] == book_info['title'] for b in liked_books):
+                liked_books.append(book_info)
 
     # Prepare recommendations dynamically based on updated list
     message = ""
@@ -198,6 +205,7 @@ def add_book():
         'recommendations': recommended_books,
         'message': message
     })
+
 
 @app.route('/remove_book', methods=['POST'])
 def remove_book():
