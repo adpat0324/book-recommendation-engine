@@ -66,11 +66,10 @@ function searchBooks(event) {
             // Check if 'items' is present and is an array
             if (data.items && Array.isArray(data.items)) {
                 data.items.forEach(book => {
-                    // Extract relevant details from the 'volumeInfo' object
-                    const bookInfo = book.volumeInfo;
-                    const title = bookInfo.title || 'No Title';
-                    const authors = bookInfo.authors ? bookInfo.authors.join(', ') : 'Unknown Author';
-                    const imageUrl = bookInfo.imageLinks ? bookInfo.imageLinks.thumbnail : '';
+                    // Backend returns simplified book info
+                    const title = book.title || 'No Title';
+                    const authors = book.authors || 'Unknown Author';
+                    const imageUrl = book.image_url || '';
                     
                     // Create the dropdown item with title, author, and cover image
                     const li = document.createElement('li');
@@ -104,4 +103,59 @@ function searchBooks(event) {
     } else {
         document.getElementById('autocomplete-results').style.display = 'none'; // Hide dropdown if no input
     }
+}
+
+// Remove a book from liked list
+function removeBook(title) {
+    fetch('/remove_book', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ book_title: title })
+    })
+    .then(response => response.json())
+    .then(data => {
+        const likedBooksList = document.getElementById('liked-books');
+        likedBooksList.innerHTML = '';
+        data.forEach(book => {
+            const li = document.createElement('li');
+            li.innerHTML = `
+                <img src="${book.image_url}" alt="${book.title} cover" width="50">
+                <p>${book.title} <span>By: ${book.authors}</span></p>
+                <button class="remove-book" onclick="removeBook('${book.title}')">X</button>
+            `;
+            likedBooksList.appendChild(li);
+        });
+
+        // Refresh recommendations after removing a book
+        getRecommendations();
+    })
+    .catch(error => console.error('Error:', error));
+}
+
+// Fetch and display recommended books
+function getRecommendations() {
+    fetch('/get_recommendations')
+        .then(response => response.json())
+        .then(data => {
+            const list = document.getElementById('recommended-books-list');
+            const messageEl = document.getElementById('recommendation-message');
+            list.innerHTML = '';
+
+            if (data.message) {
+                messageEl.textContent = data.message;
+            } else {
+                messageEl.textContent = '';
+                data.forEach(book => {
+                    const div = document.createElement('div');
+                    div.classList.add('recommended-book-item');
+                    div.innerHTML = `
+                        <img src="${book.image_url}" alt="${book.title} cover">
+                        <h4>${book.title}</h4>
+                        <p>${book.authors}</p>
+                    `;
+                    list.appendChild(div);
+                });
+            }
+        })
+        .catch(error => console.error('Error:', error));
 }
