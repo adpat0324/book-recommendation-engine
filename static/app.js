@@ -80,6 +80,7 @@ function addBookToLiked(bookTitle = null) {
 document.getElementById('liked-book').addEventListener('keydown', function(event) {
     if (event.key === 'Enter') {
         event.preventDefault();  // Prevent form submission or default behavior
+        document.getElementById('autocomplete-results').style.display = 'none';
         addBookToLiked();
     }
 });
@@ -164,10 +165,11 @@ function searchBooks(event) {
                             </div>
                         </div>
                     `;
-                    li.onclick = function() {
-                        addBookToLiked(title);  // Add book when clicked
-                        document.getElementById('autocomplete-results').style.display = 'none';  // Hide dropdown
-                    };
+                    li.addEventListener('mousedown', function(e) {
+                        e.preventDefault();
+                        document.getElementById('autocomplete-results').style.display = 'none';
+                        addBookToLiked(title);
+                    });
                     autocompleteResults.appendChild(li);
                 });
 
