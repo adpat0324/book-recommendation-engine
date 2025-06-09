@@ -14,14 +14,26 @@ liked_books = []
 
 # Function to query the Google Books API for book details
 def get_book_info(book_name):
-    url = f'https://www.googleapis.com/books/v1/volumes?q={book_name}'
-    response = requests.get(url)
+    params = {
+        'q': book_name,
+        'maxResults': 5,
+        'printType': 'books'
+    }
+    response = requests.get('https://www.googleapis.com/books/v1/volumes', params=params)
     data = response.json()
 
     if 'items' not in data:
         return None  # No books found
     
-    book_data = data['items'][0]['volumeInfo']
+    # Try to find the best match among returned items
+    book_data = None
+    for item in data['items']:
+        info = item.get('volumeInfo', {})
+        if info.get('title', '').lower() == book_name.lower():
+            book_data = info
+            break
+    if not book_data:
+        book_data = data['items'][0]['volumeInfo']
     title = book_data.get('title', 'No Title Found')
     authors = book_data.get('authors', ['Unknown Author'])
     description = book_data.get('description', 'No description available.')
@@ -37,9 +49,7 @@ def get_book_info(book_name):
         'image_url': image_url
     }
 
-# Function to get vector representation for a description using GloVe
-def get_glove_vector(description):
-    words = description.split()
+# Function to get vector representation for text using GloVe
 def get_glove_vector(text):
     words = text.split()
     vector = np.zeros(300)  # GloVe vectors are 300-dimensional
@@ -69,10 +79,24 @@ def create_book_vector(book):
 def cosine_similarity_vectors(vec1, vec2):
     return np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
 
+# Helper to normalise titles for duplicate checks
+def normalize_title(title: str) -> str:
+    return ''.join(ch.lower() for ch in title if ch.isalnum())
+
 # Function to get similar books from a large dataset (Google Books API)
 def recommend_books(liked_books):
     if len(liked_books) < 1:
         return []
+
+    # Collect genres from liked books for filtering
+    liked_genres = set()
+    for book in liked_books:
+        for g in book.get('genre', '').split(','):
+            g = g.strip()
+            if g:
+                liked_genres.add(g)
+
+    banned_keywords = {'criticism', 'writing', 'reference', 'language arts'}
 
     # Combine descriptions, genres, authors for similarity calculation
     combined_descriptions = " ".join([book['description'] for book in liked_books])
@@ -88,8 +112,12 @@ def recommend_books(liked_books):
     search_query = combined_search[:80]  # limit query length for API call
 
     # Call Google Books API to get books based on a search query
-    url = f'https://www.googleapis.com/books/v1/volumes?q={search_query}'
-    response = requests.get(url)
+    params = {
+        'q': search_query,
+        'printType': 'books',
+        'maxResults': 20
+    }
+    response = requests.get('https://www.googleapis.com/books/v1/volumes', params=params)
     books_data = response.json().get('items', [])
     
     # Get descriptions and vectors for the books fetched from Google Books API
@@ -113,12 +141,11 @@ def recommend_books(liked_books):
             'image_url': image_url
         })
     
-    # Compare each fetched book with the liked books using GloVe embeddings
-    liked_vectors = np.array([get_glove_vector(book['description']) for book in liked_books])
     # Compare each fetched book with the liked books using aggregated vectors
     liked_vectors = np.array([create_book_vector(book) for book in liked_books])
     recommended_books = []
     seen_titles = set()
+    seen_normalized = set()
     liked_titles = {(book['title'], book['authors']) for book in liked_books}
 
     for fetched_book in fetched_books:
@@ -131,11 +158,21 @@ def recommend_books(liked_books):
             similarities.append(similarity)
         
         avg_similarity = np.mean(similarities)
-        if avg_similarity > 0.1:  # We recommend books with a similarity above a threshold
+        normalized = normalize_title(fetched_book['title'])
+        if avg_similarity > 0.1:
             unique_key = (fetched_book['title'], fetched_book['authors'])
-            if unique_key not in seen_titles and unique_key not in liked_titles:
-                recommended_books.append(fetched_book)
-                seen_titles.add(unique_key)
+            if unique_key not in seen_titles and unique_key not in liked_titles and normalized not in seen_normalized:
+                # Filter based on liked genres and banned keywords
+                genres = [g.strip() for g in fetched_book.get('genre', '').split(',') if g.strip()]
+                if genres:
+                    has_genre = any(g in liked_genres for g in genres)
+                else:
+                    has_genre = False
+                banned = any(kw in fetched_book.get('genre', '').lower() for kw in banned_keywords)
+                if has_genre and not banned:
+                    recommended_books.append(fetched_book)
+                    seen_titles.add(unique_key)
+                    seen_normalized.add(normalized)
     
     return recommended_books[:5]  # Return top 5 recommended books
 
@@ -156,8 +193,12 @@ def get_recommendations():
 @app.route('/search_books')
 def search_books():
     query = request.args.get('query')
-    url = f'https://www.googleapis.com/books/v1/volumes?q={query}'
-    response = requests.get(url)
+    params = {
+        'q': query,
+        'maxResults': 20,
+        'printType': 'books'
+    }
+    response = requests.get('https://www.googleapis.com/books/v1/volumes', params=params)
     data = response.json()
     
     books = []
